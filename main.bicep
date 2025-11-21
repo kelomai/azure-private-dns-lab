@@ -56,7 +56,7 @@ resource hubVnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
     }
     dhcpOptions: {
       dnsServers: [
-        '10.0.1.4' // Domain Controller IP
+        '10.0.4.4' // DNS Resolver Inbound Endpoint (static IP)
       ]
     }
     subnets: [
@@ -142,7 +142,7 @@ resource spokeVnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
     }
     dhcpOptions: {
       dnsServers: [
-        dnsResolverInboundEndpoint.properties.ipConfigurations[0].privateIpAddress // DNS Resolver Inbound Endpoint
+        '10.0.4.4' // DNS Resolver Inbound Endpoint (static IP)
       ]
     }
     subnets: [
@@ -164,9 +164,6 @@ resource spokeVnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
       }
     ]
   }
-  dependsOn: [
-    dnsResolverInboundEndpoint
-  ]
 }
 
 // VNet Peering: Hub to Spoke
@@ -349,8 +346,21 @@ resource privateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
   properties: {}
 }
 
+// Link Private DNS Zone to Hub VNet
+resource privateDnsZoneHubLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+  parent: privateDnsZone
+  name: '${namePrefix}-hub-vnet-link'
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: hubVnet.id
+    }
+  }
+}
+
 // Link Private DNS Zone to Spoke VNet
-resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
+resource privateDnsZoneSpokeLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
   parent: privateDnsZone
   name: '${namePrefix}-spoke-vnet-link'
   location: 'global'
@@ -458,7 +468,8 @@ resource dnsResolverInboundEndpoint 'Microsoft.Network/dnsResolvers/inboundEndpo
         subnet: {
           id: hubVnet.properties.subnets[2].id // DnsResolverInboundSubnet
         }
-        privateIpAllocationMethod: 'Dynamic'
+        privateIpAllocationMethod: 'Static'
+        privateIpAddress: '10.0.4.4'
       }
     ]
   }
@@ -589,4 +600,4 @@ output spokeVnetId string = spokeVnet.id
 output privateEndpointName string = blobPrivateEndpoint.name
 output bastionName string = bastion.name
 output dnsResolverName string = dnsResolver.name
-output dnsResolverInboundEndpointIP string = dnsResolverInboundEndpoint.properties.ipConfigurations[0].privateIpAddress
+output dnsResolverInboundEndpointIP string = '10.0.4.4'
