@@ -1,0 +1,777 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.39.26.7824",
+      "templateHash": "18139177879118636574"
+    }
+  },
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "dnstest",
+      "metadata": {
+        "description": "The name prefix for all resources"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for resources"
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "azureadmin",
+      "metadata": {
+        "description": "Admin username for the domain controller"
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin password for the domain controller"
+      }
+    },
+    "domainName": {
+      "type": "string",
+      "defaultValue": "contoso.local",
+      "metadata": {
+        "description": "Domain name for Active Directory"
+      }
+    },
+    "hubVnetAddressPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.0.0/16",
+      "metadata": {
+        "description": "Hub Virtual Network address prefix"
+      }
+    },
+    "dcSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.1.0/24",
+      "metadata": {
+        "description": "Subnet address prefix for domain controller"
+      }
+    },
+    "bastionSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.3.0/26",
+      "metadata": {
+        "description": "Subnet address prefix for Azure Bastion"
+      }
+    },
+    "dnsResolverInboundSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.4.0/28",
+      "metadata": {
+        "description": "Subnet address prefix for DNS Private Resolver inbound endpoint"
+      }
+    },
+    "dnsResolverOutboundSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.5.0/28",
+      "metadata": {
+        "description": "Subnet address prefix for DNS Private Resolver outbound endpoint"
+      }
+    },
+    "spokeVnetAddressPrefix": {
+      "type": "string",
+      "defaultValue": "10.1.0.0/16",
+      "metadata": {
+        "description": "Spoke Virtual Network address prefix"
+      }
+    },
+    "clientSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.1.1.0/24",
+      "metadata": {
+        "description": "Subnet address prefix for client VMs in spoke"
+      }
+    },
+    "spokePrivateEndpointSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.1.2.0/24",
+      "metadata": {
+        "description": "Subnet address prefix for private endpoints in spoke"
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D2s_v3",
+      "metadata": {
+        "description": "VM Size for domain controller"
+      }
+    },
+    "clientVmSize": {
+      "type": "string",
+      "defaultValue": "Standard_B2s",
+      "metadata": {
+        "description": "VM Size for client machine"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-hub-vnet', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('hubVnetAddressPrefix')]"
+          ]
+        },
+        "dhcpOptions": {
+          "dnsServers": [
+            "10.0.4.4"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "DomainControllerSubnet",
+            "properties": {
+              "addressPrefix": "[parameters('dcSubnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-dc-nsg', parameters('namePrefix')))]"
+              }
+            }
+          },
+          {
+            "name": "AzureBastionSubnet",
+            "properties": {
+              "addressPrefix": "[parameters('bastionSubnetPrefix')]"
+            }
+          },
+          {
+            "name": "DnsResolverInboundSubnet",
+            "properties": {
+              "addressPrefix": "[parameters('dnsResolverInboundSubnetPrefix')]",
+              "delegations": [
+                {
+                  "name": "Microsoft.Network.dnsResolvers",
+                  "properties": {
+                    "serviceName": "Microsoft.Network/dnsResolvers"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "DnsResolverOutboundSubnet",
+            "properties": {
+              "addressPrefix": "[parameters('dnsResolverOutboundSubnetPrefix')]",
+              "delegations": [
+                {
+                  "name": "Microsoft.Network.dnsResolvers",
+                  "properties": {
+                    "serviceName": "Microsoft.Network/dnsResolvers"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-dc-nsg', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-client-nsg', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowRDP",
+            "properties": {
+              "priority": 1000,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "3389"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-spoke-vnet', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('spokeVnetAddressPrefix')]"
+          ]
+        },
+        "dhcpOptions": {
+          "dnsServers": [
+            "10.0.4.4"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "ClientSubnet",
+            "properties": {
+              "addressPrefix": "[parameters('clientSubnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-client-nsg', parameters('namePrefix')))]"
+              }
+            }
+          },
+          {
+            "name": "PrivateEndpointSubnet",
+            "properties": {
+              "addressPrefix": "[parameters('spokePrivateEndpointSubnetPrefix')]",
+              "privateEndpointNetworkPolicies": "Disabled"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-client-nsg', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', format('{0}-hub-vnet', parameters('namePrefix')), 'hub-to-spoke')]",
+      "properties": {
+        "remoteVirtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]"
+        },
+        "allowVirtualNetworkAccess": true,
+        "allowForwardedTraffic": true,
+        "allowGatewayTransit": false,
+        "useRemoteGateways": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', format('{0}-spoke-vnet', parameters('namePrefix')), 'spoke-to-hub')]",
+      "properties": {
+        "remoteVirtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]"
+        },
+        "allowVirtualNetworkAccess": true,
+        "allowForwardedTraffic": true,
+        "allowGatewayTransit": false,
+        "useRemoteGateways": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-dc-nsg', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowDNS",
+            "properties": {
+              "priority": 1100,
+              "protocol": "*",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "53"
+            }
+          },
+          {
+            "name": "AllowAD",
+            "properties": {
+              "priority": 1200,
+              "protocol": "*",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRanges": [
+                "88",
+                "135",
+                "389",
+                "445",
+                "464",
+                "636",
+                "3268",
+                "3269"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-dc-nic', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix'))), '2023-05-01').subnets[0].id]"
+              },
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "10.0.1.4"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}-dc', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "DC01",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": true,
+            "provisionVMAgent": true
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage",
+            "diskSizeGB": 128,
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-dc-nic', parameters('namePrefix')))]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-dc-nic', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', format('{0}-dc', parameters('namePrefix')), 'ConfigureADDC')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "publisher": "Microsoft.Compute",
+        "type": "CustomScriptExtension",
+        "typeHandlerVersion": "1.10",
+        "autoUpgradeMinorVersion": true,
+        "protectedSettings": {
+          "commandToExecute": "[format('powershell.exe -ExecutionPolicy Unrestricted -Command \"Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools; Install-ADDSForest -DomainName {0} -SafeModeAdministratorPassword (ConvertTo-SecureString -String ''{1}'' -AsPlainText -Force) -InstallDns -Force\"', parameters('domainName'), parameters('adminPassword'))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-dc', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}{1}', parameters('namePrefix'), uniqueString(resourceGroup().id))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "accessTier": "Hot",
+        "publicNetworkAccess": "Disabled",
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "networkAcls": {
+          "defaultAction": "Deny",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "[format('privatelink.blob.{0}', environment().suffixes.storage)]",
+      "location": "global",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', format('privatelink.blob.{0}', environment().suffixes.storage), format('{0}-hub-vnet-link', parameters('namePrefix')))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', format('privatelink.blob.{0}', environment().suffixes.storage))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', format('privatelink.blob.{0}', environment().suffixes.storage), format('{0}-spoke-vnet-link', parameters('namePrefix')))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', format('privatelink.blob.{0}', environment().suffixes.storage))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-blob-pe', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subnet": {
+          "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix'))), '2023-05-01').subnets[1].id]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "[format('{0}-blob-pe-connection', parameters('namePrefix'))]",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', format('{0}{1}', parameters('namePrefix'), uniqueString(resourceGroup().id)))]",
+              "groupIds": [
+                "blob"
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', format('{0}{1}', parameters('namePrefix'), uniqueString(resourceGroup().id)))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', format('{0}-blob-pe', parameters('namePrefix')), 'default')]",
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "blob-config",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', format('privatelink.blob.{0}', environment().suffixes.storage))]"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateEndpoints', format('{0}-blob-pe', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', format('privatelink.blob.{0}', environment().suffixes.storage))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-bastion-pip', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "type": "Microsoft.Network/bastionHosts",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-bastion', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Basic"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "bastionIpConfig",
+            "properties": {
+              "subnet": {
+                "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix'))), '2023-05-01').subnets[1].id]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-bastion-pip', parameters('namePrefix')))]"
+              }
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-bastion-pip', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/dnsResolvers",
+      "apiVersion": "2022-07-01",
+      "name": "[format('{0}-dns-resolver', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/dnsResolvers/inboundEndpoints",
+      "apiVersion": "2022-07-01",
+      "name": "[format('{0}/{1}', format('{0}-dns-resolver', parameters('namePrefix')), format('{0}-inbound-endpoint', parameters('namePrefix')))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "subnet": {
+              "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix'))), '2023-05-01').subnets[2].id]"
+            },
+            "privateIpAllocationMethod": "Static",
+            "privateIpAddress": "10.0.4.4"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/dnsResolvers', format('{0}-dns-resolver', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/dnsResolvers/outboundEndpoints",
+      "apiVersion": "2022-07-01",
+      "name": "[format('{0}/{1}', format('{0}-dns-resolver', parameters('namePrefix')), format('{0}-outbound-endpoint', parameters('namePrefix')))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subnet": {
+          "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix'))), '2023-05-01').subnets[3].id]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/dnsResolvers', format('{0}-dns-resolver', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/dnsForwardingRulesets",
+      "apiVersion": "2022-07-01",
+      "name": "[format('{0}-forwarding-ruleset', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "dnsResolverOutboundEndpoints": [
+          {
+            "id": "[resourceId('Microsoft.Network/dnsResolvers/outboundEndpoints', format('{0}-dns-resolver', parameters('namePrefix')), format('{0}-outbound-endpoint', parameters('namePrefix')))]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/dnsResolvers/outboundEndpoints', format('{0}-dns-resolver', parameters('namePrefix')), format('{0}-outbound-endpoint', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/dnsForwardingRulesets/forwardingRules",
+      "apiVersion": "2022-07-01",
+      "name": "[format('{0}/{1}', format('{0}-forwarding-ruleset', parameters('namePrefix')), 'forward-to-dc')]",
+      "properties": {
+        "domainName": "[format('{0}.', parameters('domainName'))]",
+        "targetDnsServers": [
+          {
+            "ipAddress": "10.0.1.4",
+            "port": 53
+          }
+        ],
+        "forwardingRuleState": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/dnsForwardingRulesets', format('{0}-forwarding-ruleset', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/dnsForwardingRulesets/virtualNetworkLinks",
+      "apiVersion": "2022-07-01",
+      "name": "[format('{0}/{1}', format('{0}-forwarding-ruleset', parameters('namePrefix')), format('{0}-spoke-link', parameters('namePrefix')))]",
+      "properties": {
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/dnsForwardingRulesets', format('{0}-forwarding-ruleset', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-client-nic', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix'))), '2023-05-01').subnets[0].id]"
+              },
+              "privateIPAllocationMethod": "Dynamic"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}-client', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('clientVmSize')]"
+        },
+        "osProfile": {
+          "computerName": "CLIENT01",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": true,
+            "provisionVMAgent": true
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsDesktop",
+            "offer": "Windows-11",
+            "sku": "win11-23h2-pro",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage",
+            "diskSizeGB": 128,
+            "managedDisk": {
+              "storageAccountType": "StandardSSD_LRS"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-client-nic', parameters('namePrefix')))]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-client-nic', parameters('namePrefix')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "domainControllerIP": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', format('{0}-dc-nic', parameters('namePrefix'))), '2023-05-01').ipConfigurations[0].properties.privateIPAddress]"
+    },
+    "clientVMPrivateIP": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', format('{0}-client-nic', parameters('namePrefix'))), '2023-05-01').ipConfigurations[0].properties.privateIPAddress]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[format('{0}{1}', parameters('namePrefix'), uniqueString(resourceGroup().id))]"
+    },
+    "storageAccountId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Storage/storageAccounts', format('{0}{1}', parameters('namePrefix'), uniqueString(resourceGroup().id)))]"
+    },
+    "privateDnsZoneName": {
+      "type": "string",
+      "value": "[format('privatelink.blob.{0}', environment().suffixes.storage)]"
+    },
+    "hubVnetName": {
+      "type": "string",
+      "value": "[format('{0}-hub-vnet', parameters('namePrefix'))]"
+    },
+    "hubVnetId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-hub-vnet', parameters('namePrefix')))]"
+    },
+    "spokeVnetName": {
+      "type": "string",
+      "value": "[format('{0}-spoke-vnet', parameters('namePrefix'))]"
+    },
+    "spokeVnetId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-spoke-vnet', parameters('namePrefix')))]"
+    },
+    "privateEndpointName": {
+      "type": "string",
+      "value": "[format('{0}-blob-pe', parameters('namePrefix'))]"
+    },
+    "bastionName": {
+      "type": "string",
+      "value": "[format('{0}-bastion', parameters('namePrefix'))]"
+    },
+    "dnsResolverName": {
+      "type": "string",
+      "value": "[format('{0}-dns-resolver', parameters('namePrefix'))]"
+    },
+    "dnsResolverInboundEndpointIP": {
+      "type": "string",
+      "value": "10.0.4.4"
+    }
+  }
+}

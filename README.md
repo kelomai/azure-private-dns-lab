@@ -2,6 +2,8 @@
 
 A complete Azure lab environment for testing DNS infrastructure scripts, featuring a hub-spoke network with Active Directory, Azure DNS Private Resolver, and Private Endpoints.
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkelomai%2Fazure-private-dns-lab%2Fmain%2Fazuredeploy.json)
+
 ## 📖 Documentation
 
 **Start here:** [Complete Guide (docs/GUIDE.md)](docs/GUIDE.md) - Everything you need to deploy and test the lab
@@ -10,7 +12,22 @@ A complete Azure lab environment for testing DNS infrastructure scripts, featuri
 
 ## Quick Start
 
+### Option 1: Deploy to Azure Button
+
+Click the **Deploy to Azure** button above to deploy directly from the Azure Portal. You'll be prompted to:
+
+1. Select your subscription and resource group
+2. Choose a location (e.g., `eastus`)
+3. Set an admin password for the VMs
+4. Click **Review + Create**
+
+### Option 2: PowerShell Script
+
+Clone the repo and run the deployment script:
+
 ```powershell
+git clone https://github.com/kelomai/azure-private-dns-lab.git
+cd azure-private-dns-lab
 ./Deploy-TestEnvironment.ps1 -ResourceGroupName "rg-dnstest" -Location "eastus"
 ```
 
@@ -120,8 +137,9 @@ Create DNS conditional forwarders for specific domains.
 ```
 /
 ├── README.md                          # This file
-├── Deploy-TestEnvironment.ps1         # Automated deployment
-├── main.bicep                         # Infrastructure template
+├── Deploy-TestEnvironment.ps1         # Automated deployment script
+├── main.bicep                         # Infrastructure template (Bicep)
+├── azuredeploy.json                   # Infrastructure template (ARM - for Deploy button)
 ├── main.parameters.json               # Sample parameters
 ├── Export-DNSZone.ps1                 # DNS backup script
 ├── Import-DNSZone.ps1                 # DNS restore script
