@@ -1,8 +1,11 @@
 # Azure DNS Infrastructure Testing Lab
 
-A complete Azure lab environment for testing DNS infrastructure scripts, featuring a hub-spoke network with Active Directory, Azure DNS Private Resolver, and Private Endpoints.
-
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkelomai%2Fazure-private-dns-lab%2Fmain%2Fazuredeploy.json)
+
+A complete, open-source Azure lab environment for testing DNS infrastructure scripts, featuring a hub-spoke network with Active Directory, Azure DNS Private Resolver, and Private Endpoints.
+
+**This project is open source under the MIT License.** Contributions, issues, and feedback are welcome!
 
 ## 📖 Documentation
 
@@ -137,6 +140,8 @@ Create DNS conditional forwarders for specific domains.
 ```
 /
 ├── README.md                          # This file
+├── LICENSE                            # MIT License
+├── CONTRIBUTING.md                    # Contribution guidelines
 ├── Deploy-TestEnvironment.ps1         # Automated deployment script
 ├── main.bicep                         # Infrastructure template (Bicep)
 ├── azuredeploy.json                   # Infrastructure template (ARM - for Deploy button)
@@ -219,8 +224,21 @@ az group delete --name "rg-dnstest" --yes --no-wait
 
 **Save money:** Delete Bastion when not testing (-$140/month)
 
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
+- Reporting issues and suggesting features
+- Submitting pull requests
+- Code standards for Bicep and PowerShell
+- Testing your changes
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## Support
 
 - **Full documentation:** [docs/GUIDE.md](docs/GUIDE.md)
 - **Technical details:** [docs/TECHNICAL-NOTES.md](docs/TECHNICAL-NOTES.md)
-- **Azure Portal logs:** Check deployment and VM extension status
+- **Issues & Questions:** [GitHub Issues](https://github.com/kelomai/azure-private-dns-lab/issues)
