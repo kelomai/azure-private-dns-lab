@@ -3,6 +3,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkelomai%2Fazure-private-dns-lab%2Fmain%2Fazuredeploy.json)
 
+📖 **Read the full blog post:** [Build a Hybrid DNS Lab for Azure Private Endpoints](https://kelomai.io/azure-private-dns-lab)
+
 A complete, open-source Azure lab environment for testing DNS infrastructure scripts, featuring a hub-spoke network with Active Directory, Azure DNS Private Resolver, and Private Endpoints.
 
 **This project is open source under the MIT License.** Contributions, issues, and feedback are welcome!
